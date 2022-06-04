@@ -133,6 +133,7 @@ HtmlFont::HtmlFont(const GfxFont &font, int _size, GfxRGB rgb, double opacity)
     size = _size;
     italic = false;
     bold = false;
+    fixedWidth = false;
     rotOrSkewed = false;
 
     if (font.isBold() || font.getWeight() >= GfxFont::W700) {
@@ -140,6 +141,9 @@ HtmlFont::HtmlFont(const GfxFont &font, int _size, GfxRGB rgb, double opacity)
     }
     if (font.isItalic()) {
         italic = true;
+    }
+    if (font.isFixedWidth()) {
+        fixedWidth = true;
     }
 
     if (const GooString *fontname = font.getName()) {
@@ -154,6 +158,10 @@ HtmlFont::HtmlFont(const GfxFont &font, int _size, GfxRGB rgb, double opacity)
 
         if (!italic && (strstr(fontnameLower.c_str(), "italic") || strstr(fontnameLower.c_str(), "oblique"))) {
             italic = true;
+        }
+
+        if (!fixedWidth && strstr(fontnameLower.c_str(), "mono")) {
+            fixedWidth = true;
         }
 
         familyName = fontname->c_str();
@@ -172,6 +180,7 @@ HtmlFont::HtmlFont(const HtmlFont &x)
     lineSize = x.lineSize;
     italic = x.italic;
     bold = x.bold;
+    fixedWidth = x.fixedWidth;
     familyName = x.familyName;
     color = x.color;
     FontName = new GooString(x.FontName);
@@ -193,6 +202,7 @@ HtmlFont &HtmlFont::operator=(const HtmlFont &x)
     lineSize = x.lineSize;
     italic = x.italic;
     bold = x.bold;
+    fixedWidth = x.fixedWidth;
     familyName = x.familyName;
     color = x.color;
     delete FontName;
@@ -206,7 +216,7 @@ HtmlFont &HtmlFont::operator=(const HtmlFont &x)
 */
 bool HtmlFont::isEqual(const HtmlFont &x) const
 {
-    return (size == x.size) && (lineSize == x.lineSize) && (FontName->cmp(x.FontName) == 0) && (bold == x.bold) && (italic == x.italic) && (color.isEqual(x.getColor())) && isRotOrSkewed() == x.isRotOrSkewed()
+    return (size == x.size) && (lineSize == x.lineSize) && (FontName->cmp(x.FontName) == 0) && (bold == x.bold) && (italic == x.italic) && (fixedWidth == x.fixedWidth) && (color.isEqual(x.getColor())) && isRotOrSkewed() == x.isRotOrSkewed()
             && (!isRotOrSkewed() || rot_matrices_equal(getRotMat(), x.getRotMat()));
 }
 

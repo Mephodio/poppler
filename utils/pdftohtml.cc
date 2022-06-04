@@ -98,6 +98,7 @@ bool fontFullName = false;
 static char ownerPassword[33] = "";
 static char userPassword[33] = "";
 static bool printVersion = false;
+bool keepMono = false;
 
 static GooString *getInfoString(Dict *infoDict, const char *key);
 static GooString *getInfoDate(Dict *infoDict, const char *key);
@@ -135,6 +136,7 @@ static const ArgDesc argDesc[] = { { "-f", argInt, &firstPage, 0, "first page to
                                    { "-nodrm", argFlag, &noDrm, 0, "override document DRM settings" },
                                    { "-wbt", argFP, &wordBreakThreshold, 0, "word break threshold (default 10 percent)" },
                                    { "-fontfullname", argFlag, &fontFullName, 0, "outputs font full name" },
+                                   { "-mono", argFlag, &keepMono, 0, "keep monospaced text blocks" },
                                    {} };
 
 class SplashOutputDevNoText : public SplashOutputDev
@@ -168,6 +170,14 @@ int main(int argc, char *argv[])
     std::optional<GooString> ownerPW, userPW;
     Object info;
     int exit_status = EXIT_FAILURE;
+
+    int i;
+    fprintf(stderr, "%d\n",argc);
+    for(i=0;i<argc-1;i++)
+    {
+        fprintf(stderr, "%s ",argv[i]);
+    }
+    fprintf(stderr, "\n");
 
     Win32Console win32Console(&argc, &argv);
     // parse args
@@ -343,6 +353,8 @@ int main(int argc, char *argv[])
     if (date) {
         delete date;
     }
+
+    puts("test");
 
     if ((complexMode || singleHtml) && !xml && !ignore) {
         GooString *imgFileName = nullptr;

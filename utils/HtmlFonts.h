@@ -79,6 +79,7 @@ private:
     int lineSize;
     bool italic;
     bool bold;
+    bool fixedWidth;
     bool rotOrSkewed;
     std::string familyName;
     GooString *FontName;
@@ -93,6 +94,7 @@ public:
     GooString *getFullName();
     bool isItalic() const { return italic; }
     bool isBold() const { return bold; }
+    bool isFixedWidth() const { return fixedWidth; }
     bool isRotOrSkewed() const { return rotOrSkewed; }
     int getSize() const { return size; }
     int getLineSize() const { return lineSize; }
@@ -107,7 +109,7 @@ public:
     static GooString *HtmlFilter(const Unicode *u, int uLen); // char* s);
     bool isEqual(const HtmlFont &x) const;
     bool isEqualIgnoreBold(const HtmlFont &x) const;
-    void print() const { printf("font: %s (%s) %d %s%s\n", FontName->c_str(), familyName.c_str(), size, bold ? "bold " : "", italic ? "italic " : ""); };
+    void print() const { printf("font: %s (%s) %d %s%s%s\n", FontName->c_str(), familyName.c_str(), size, bold ? "bold " : "", italic ? "italic " : "", fixedWidth ? "fixedWidth " : ""); };
 };
 
 class HtmlFontAccu

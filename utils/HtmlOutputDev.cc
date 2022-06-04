@@ -236,11 +236,29 @@ HtmlString::HtmlString(GfxState *state, double fontSize, HtmlFontAccu *_fonts) :
     dir = textDirUnknown;
 }
 
+HtmlString::HtmlString(GooString *_fName, GfxState *state)
+{
+    htext = _fName;
+    state->transform(0, 0, &xMin, &yMax);
+    state->transform(1, 1, &xMax, &yMin);
+
+    col = 0;
+    text = nullptr;
+    xRight = nullptr;
+    link = nullptr;
+    len = size = -1;
+    yxNext = nullptr;
+    xyNext = nullptr;
+    dir = textDirUnknown;
+}
+
 HtmlString::~HtmlString()
 {
-    gfree(text);
-    delete htext;
-    gfree(xRight);
+    if (len != -1) {
+        gfree(text);
+        delete htext;
+        gfree(xRight);
+    }
 }
 
 void HtmlString::addChar(GfxState *state, double x, double y, double dx, double dy, Unicode u)
@@ -350,6 +368,9 @@ void HtmlPage::beginString(GfxState *state, const GooString *s)
 void HtmlPage::conv()
 {
     for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
+
+        if (tmp->len == -1) continue;
+
         delete tmp->htext;
         tmp->htext = HtmlFont::HtmlFilter(tmp->text, tmp->len);
 
@@ -467,11 +488,12 @@ static const char *strrstr(const char *s, const char *ss)
     return p;
 }
 
-static void CloseTags(GooString *htext, bool &finish_a, bool &finish_italic, bool &finish_bold)
+static void CloseTags(GooString *htext, bool &finish_a, bool &finish_italic, bool &finish_bold, bool &finish_fixedWidth)
 {
-    const char *last_italic = finish_italic && (finish_bold || finish_a) ? strrstr(htext->c_str(), "<i>") : nullptr;
-    const char *last_bold = finish_bold && (finish_italic || finish_a) ? strrstr(htext->c_str(), "<b>") : nullptr;
-    const char *last_a = finish_a && (finish_italic || finish_bold) ? strrstr(htext->c_str(), "<a ") : nullptr;
+    const char *last_italic = finish_italic && (finish_bold || finish_a || finish_fixedWidth) ? strrstr(htext->c_str(), "<i>") : nullptr;
+    const char *last_bold = finish_bold && (finish_italic || finish_a || finish_fixedWidth) ? strrstr(htext->c_str(), "<b>") : nullptr;
+    const char *last_a = finish_a && (finish_italic || finish_bold || finish_fixedWidth) ? strrstr(htext->c_str(), "<a ") : nullptr;
+    // const char *last_fixedWidth = finish_fixedWidth && (finish_italic || finish_a || finish_bold) ? strrstr(htext->c_str(), "<code>") : nullptr;
     if (finish_a && (finish_italic || finish_bold) && last_a > (last_italic > last_bold ? last_italic : last_bold)) {
         htext->append("</a>", 4);
         finish_a = false;
@@ -487,7 +509,10 @@ static void CloseTags(GooString *htext, bool &finish_a, bool &finish_italic, boo
         htext->append("</i>", 4);
     }
     if (finish_a) {
-        htext->append("</a>");
+        htext->append("</a>", 4);
+    }
+    if (finish_fixedWidth) {
+        htext->append("</code>");
     }
 }
 
@@ -525,28 +550,35 @@ void HtmlPage::coalesce()
         HtmlString *str3;
         bool found;
         while (str1) {
-            double size = str1->yMax - str1->yMin;
-            double xLimit = str1->xMin + size;
-            found = false;
-            for (str2 = str1, str3 = str1->yxNext; str3 && str3->xMin < xLimit; str2 = str3, str3 = str2->yxNext) {
-                if (str3->len == str1->len && !memcmp(str3->text, str1->text, str1->len * sizeof(Unicode)) && fabs(str3->yMin - str1->yMin) < size * 0.2 && fabs(str3->yMax - str1->yMax) < size * 0.2
-                    && fabs(str3->xMax - str1->xMax) < size * 0.1) {
-                    found = true;
-                    // printf("found duplicate!\n");
-                    break;
-                }
-            }
-            if (found) {
-                str2->xyNext = str3->xyNext;
-                str2->yxNext = str3->yxNext;
-                delete str3;
-            } else {
+            if (str1->len == -1) {
                 str1 = str1->yxNext;
+            } else {
+                double size = str1->yMax - str1->yMin;
+                double xLimit = str1->xMin + size;
+                found = false;
+                for (str2 = str1, str3 = str1->yxNext; str3 && str3->xMin < xLimit; str2 = str3, str3 = str2->yxNext) {
+                    if (str1->len == -1 || str2->len == -1 || str3->len == -1) continue;
+                    if (str3->len == str1->len && !memcmp(str3->text, str1->text, str1->len * sizeof(Unicode)) && fabs(str3->yMin - str1->yMin) < size * 0.2 && fabs(str3->yMax - str1->yMax) < size * 0.2
+                        && fabs(str3->xMax - str1->xMax) < size * 0.1) {
+                        found = true;
+                        // printf("found duplicate!\n");
+                        break;
+                    }
+                }
+                if (found) {
+                    str2->xyNext = str3->xyNext;
+                    str2->yxNext = str3->yxNext;
+                    delete str3;
+                } else {
+                    str1 = str1->yxNext;
+                }
             }
         }
     } /*- !complexMode */
 
     str1 = yxStrings;
+
+    while (str1 && str1->len == -1) str1 = str1->yxNext;
 
     const HtmlFont *hfont1 = getFont(str1);
     if (hfont1->isBold()) {
@@ -554,6 +586,9 @@ void HtmlPage::coalesce()
     }
     if (hfont1->isItalic()) {
         str1->htext->insert(0, "<i>", 3);
+    }
+    if (hfont1->isFixedWidth()) {
+        str1->htext->insert(0, "<code>", 6);
     }
     if (str1->getLink() != nullptr) {
         GooString *ls = str1->getLink()->getLinkStart();
@@ -564,6 +599,11 @@ void HtmlPage::coalesce()
     curY = str1->yMin;
 
     while (str1 && (str2 = str1->yxNext)) {
+        if (str1->len == -1 || str2->len == -1) {
+            str1 = str2;
+            continue;
+        }
+
         const HtmlFont *hfont2 = getFont(str2);
         space = str1->yMax - str1->yMin; // the height of the font's bounding box
         horSpace = str2->xMin - str1->xMax;
@@ -646,7 +686,8 @@ void HtmlPage::coalesce()
             bool finish_a = switch_links && hlink1 != nullptr;
             bool finish_italic = hfont1->isItalic() && (!hfont2->isItalic() || finish_a);
             bool finish_bold = hfont1->isBold() && (!hfont2->isBold() || finish_a || finish_italic);
-            CloseTags(str1->htext, finish_a, finish_italic, finish_bold);
+            bool finish_fixedWidth = hfont1->isFixedWidth() && (!hfont2->isFixedWidth() || finish_a || finish_italic || finish_bold);
+            CloseTags(str1->htext, finish_a, finish_italic, finish_bold, finish_fixedWidth);
             if (switch_links && hlink2 != nullptr) {
                 GooString *ls = hlink2->getLinkStart();
                 str1->htext->append(ls);
@@ -657,6 +698,9 @@ void HtmlPage::coalesce()
             }
             if ((!hfont1->isBold() || finish_bold) && hfont2->isBold()) {
                 str1->htext->append("<b>", 3);
+            }
+            if ((!hfont1->isFixedWidth() || finish_fixedWidth) && hfont2->isFixedWidth()) {
+                str1->htext->append("<code>", 6);
             }
 
             str1->htext->append(str2->htext);
@@ -676,7 +720,8 @@ void HtmlPage::coalesce()
             bool finish_a = str1->getLink() != nullptr;
             bool finish_bold = hfont1->isBold();
             bool finish_italic = hfont1->isItalic();
-            CloseTags(str1->htext, finish_a, finish_italic, finish_bold);
+            bool finish_fixedWidth = hfont1->isFixedWidth();
+            CloseTags(str1->htext, finish_a, finish_italic, finish_bold, finish_fixedWidth);
 
             str1->xMin = curX;
             str1->yMin = curY;
@@ -690,6 +735,9 @@ void HtmlPage::coalesce()
             if (hfont1->isItalic()) {
                 str1->htext->insert(0, "<i>", 3);
             }
+            if (hfont1->isFixedWidth()) {
+                str1->htext->insert(0, "<code>", 6);
+            }
             if (str1->getLink() != nullptr) {
                 GooString *ls = str1->getLink()->getLinkStart();
                 str1->htext->insert(0, ls);
@@ -702,8 +750,9 @@ void HtmlPage::coalesce()
 
     bool finish_bold = hfont1->isBold();
     bool finish_italic = hfont1->isItalic();
+    bool finish_fixedWidth = hfont1->isFixedWidth();
     bool finish_a = str1->getLink() != nullptr;
-    CloseTags(str1->htext, finish_a, finish_italic, finish_bold);
+    CloseTags(str1->htext, finish_a, finish_italic, finish_bold, finish_fixedWidth);
 
 #if 0 //~ for debugging
   for (str1 = yxStrings; str1; str1 = str1->yxNext) {
@@ -742,7 +791,7 @@ void HtmlPage::dumpAsXML(FILE *f, int page)
     imgList.clear();
 
     for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
-        if (tmp->htext) {
+        if (tmp->len != -1 && tmp->htext) {
             if (!noRoundedCoordinates) {
                 fprintf(f, "<text top=\"%d\" left=\"%d\" ", xoutRound(tmp->yMin), xoutRound(tmp->xMin));
                 fprintf(f, "width=\"%d\" height=\"%d\" ", xoutRound(tmp->xMax - tmp->xMin), xoutRound(tmp->yMax - tmp->yMin));
@@ -897,7 +946,7 @@ void HtmlPage::dumpComplex(FILE *file, int page, const std::vector<std::string> 
     }
 
     for (HtmlString *tmp1 = yxStrings; tmp1; tmp1 = tmp1->yxNext) {
-        if (tmp1->htext) {
+        if (tmp1->len != -1 && tmp1->htext) {
             fprintf(pageFile, "<p style=\"position:absolute;top:%dpx;left:%dpx;white-space:nowrap\" class=\"ft", xoutRound(tmp1->yMin), xoutRound(tmp1->xMin));
             if (!singleHtml) {
                 fputc('0', pageFile);
@@ -929,31 +978,38 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
         }
     } else {
         fprintf(f, "<a name=%d></a>", pageNum);
+
+        for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
+            if (tmp->htext) {
+                if (tmp->len == -1) {
+                    // see printCSS() for class names
+                    const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
+                    int style_index = 0;
+                    if (tmp->xMin > tmp->xMax) {
+                        style_index += 1; // xFlip
+                    }
+                    if (tmp->yMin > tmp->yMax) {
+                        style_index += 2; // yFlip
+                    }
+
+                    fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], tmp->htext->c_str());
+                    // delete img;
+
+                }
+                else {
+                    fputs(tmp->htext->c_str(), f);
+                    fputs("<br/>\n", f);
+                }
+            }
+        }
+
         // Loop over the list of image names on this page
         for (auto ptr : imgList) {
             auto img = static_cast<HtmlImage *>(ptr);
-
-            // see printCSS() for class names
-            const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
-            int style_index = 0;
-            if (img->xMin > img->xMax) {
-                style_index += 1; // xFlip
-            }
-            if (img->yMin > img->yMax) {
-                style_index += 2; // yFlip
-            }
-
-            fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], img->fName->c_str());
             delete img;
         }
         imgList.clear();
 
-        for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
-            if (tmp->htext) {
-                fputs(tmp->htext->c_str(), f);
-                fputs("<br/>\n", f);
-            }
-        }
         fputs("<hr/>\n", f);
     }
 }
@@ -993,8 +1049,38 @@ void HtmlPage::setDocName(const char *fname)
 
 void HtmlPage::addImage(GooString *fname, GfxState *state)
 {
+    HtmlString *p1, *p2;
+    double h, y1, y2;
+
     HtmlImage *img = new HtmlImage(fname, state);
+    HtmlString *imgInText = new HtmlString(fname, state);
     imgList.push_back(img);
+
+    // insert image in y-major string list
+    h = imgInText->yMax - imgInText->yMin;
+    y1 = imgInText->yMin + 0.5 * h;
+    y2 = imgInText->yMin + 0.8 * h;
+    if (rawOrder) {
+        p1 = yxCur1;
+        p2 = nullptr;
+    } else if ((!yxCur1 || (y1 >= yxCur1->yMin && (y2 >= yxCur1->yMax || imgInText->xMax >= yxCur1->xMin))) && (!yxCur2 || (y1 < yxCur2->yMin || (y2 < yxCur2->yMax && imgInText->xMax < yxCur2->xMin)))) {
+        p1 = yxCur1;
+        p2 = yxCur2;
+    } else {
+        for (p1 = nullptr, p2 = yxStrings; p2; p1 = p2, p2 = p2->yxNext) {
+            if (y1 < p2->yMin || (y2 < p2->yMax && imgInText->xMax < p2->xMin)) {
+                break;
+            }
+        }
+        yxCur2 = p2;
+    }
+    yxCur1 = imgInText;
+    if (p1) {
+        p1->yxNext = imgInText;
+    } else {
+        yxStrings = imgInText;
+    }
+    imgInText->yxNext = p2;
 }
 
 //------------------------------------------------------------------------

@@ -71,6 +71,7 @@ class HtmlString
 public:
     // Constructor.
     HtmlString(GfxState *state, double fontSize, HtmlFontAccu *fonts);
+    HtmlString(GooString *_fName, GfxState *state);
 
     // Destructor.
     ~HtmlString();
