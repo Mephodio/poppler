@@ -101,6 +101,7 @@ private:
     int size; // size of text and xRight arrays
     UnicodeTextDirection dir; // direction (left to right/right to left)
     HtmlFontAccu *fonts;
+    bool printed;
 
     friend class HtmlPage;
 };

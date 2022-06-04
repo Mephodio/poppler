@@ -234,6 +234,7 @@ HtmlString::HtmlString(GfxState *state, double fontSize, HtmlFontAccu *_fonts) :
     xyNext = nullptr;
     htext = new GooString();
     dir = textDirUnknown;
+    printed = false;
 }
 
 HtmlString::HtmlString(GooString *_fName, GfxState *state)
@@ -250,6 +251,7 @@ HtmlString::HtmlString(GooString *_fName, GfxState *state)
     yxNext = nullptr;
     xyNext = nullptr;
     dir = textDirUnknown;
+    printed = false;
 }
 
 HtmlString::~HtmlString()
@@ -979,26 +981,48 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
     } else {
         fprintf(f, "<a name=%d></a>", pageNum);
 
-        for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
-            if (tmp->htext) {
-                if (tmp->len == -1) {
-                    // see printCSS() for class names
-                    const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
-                    int style_index = 0;
-                    if (tmp->xMin > tmp->xMax) {
-                        style_index += 1; // xFlip
-                    }
-                    if (tmp->yMin > tmp->yMax) {
-                        style_index += 2; // yFlip
-                    }
+        double curXMin;
+        bool repeat = true;
 
-                    fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], tmp->htext->c_str());
-                    // delete img;
+        while (repeat) {
+            curXMin = INFINITY;
+            repeat = false;
 
+            for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
+                if (tmp->htext && !(tmp->printed)) {
+                    if (tmp->xMin < curXMin) {
+                        curXMin = tmp->xMin;
+                    }
                 }
-                else {
-                    fputs(tmp->htext->c_str(), f);
-                    fputs("<br/>\n", f);
+            }
+
+            for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
+                if (tmp->htext && !(tmp->printed)) {
+                    if (tmp->xMin > curXMin + abs(tmp->xMax - tmp->xMin) * 0.1) {
+                        // printf("curXMin: %f  \txMin: %f\n", curXMin, tmp->xMin);
+                        repeat = true;
+                        continue;
+                    }
+                    tmp->printed = true;
+                    if (tmp->len == -1) {
+                        // see printCSS() for class names
+                        const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
+                        int style_index = 0;
+                        if (tmp->xMin > tmp->xMax) {
+                            style_index += 1; // xFlip
+                        }
+                        if (tmp->yMin > tmp->yMax) {
+                            style_index += 2; // yFlip
+                        }
+
+                        fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], tmp->htext->c_str());
+                        // delete img;
+
+                    }
+                    else {
+                        fputs(tmp->htext->c_str(), f);
+                        fputs("<br/>\n", f);
+                    }
                 }
             }
         }
