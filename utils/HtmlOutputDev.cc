@@ -996,6 +996,7 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
             for (HtmlString *tmp = yxStrings; tmp; prev = tmp, tmp = tmp->yxNext) {
                 if (tmp->htext && !(tmp->printed)) {
                     if (!ptrFrom) {
+                        curXMin = tmp->xMin;
                         ptrFrom = tmp;
                     } else if (abs(tmp->xMin - curXMin) > 0.0001) {
                         // TODO: detect collision
@@ -1018,15 +1019,16 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
                         }
 
                         // if (prev->len == -1 || tmp->len == -1) {
-                        if (isCollision && pageNum != 8) {
-                            printf("\ncol | curXMin %f\n", curXMin);
-                            printf("    prev: yMin %f yMax %f xMin %f xMax %f | %s\n", prev->yMin, prev->yMax, prev->xMin, prev->xMax, prev->htext->c_str());
-                            printf("    tmp:  yMin %f yMax %f xMin %f xMax %f | %s\n", tmp->yMin, tmp->yMax, tmp->xMin, tmp->xMax, tmp->htext->c_str());
-                        }
+                        // if (isCollision && pageNum != 8) {
+                        //     printf("\ncol | curXMin %f\n", curXMin);
+                        //     printf("    prev: yMin %f yMax %f xMin %f xMax %f | %s\n", prev->yMin, prev->yMax, prev->xMin, prev->xMax, prev->htext->c_str());
+                        //     printf("    tmp:  yMin %f yMax %f xMin %f xMax %f | %s\n", tmp->yMin, tmp->yMax, tmp->xMin, tmp->xMax, tmp->htext->c_str());
+                        // }
 
                         if (isCollision) {
                             repeat = true;
                             if (tmp->xMin < curXMin) {
+                                curXMin = tmp->xMin;
                                 ptrFrom = tmp;
                             }
                         } else {
@@ -1044,10 +1046,10 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
                                 break;
                             }
 
+                            curXMin = tmp->xMin;
                             ptrFrom = tmp;
                         }
                     }
-                    curXMin = tmp->xMin;
                 }
             }
             if (ptrFrom) {

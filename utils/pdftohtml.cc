@@ -98,7 +98,6 @@ bool fontFullName = false;
 static char ownerPassword[33] = "";
 static char userPassword[33] = "";
 static bool printVersion = false;
-bool keepMono = false;
 
 static GooString *getInfoString(Dict *infoDict, const char *key);
 static GooString *getInfoDate(Dict *infoDict, const char *key);
@@ -136,7 +135,6 @@ static const ArgDesc argDesc[] = { { "-f", argInt, &firstPage, 0, "first page to
                                    { "-nodrm", argFlag, &noDrm, 0, "override document DRM settings" },
                                    { "-wbt", argFP, &wordBreakThreshold, 0, "word break threshold (default 10 percent)" },
                                    { "-fontfullname", argFlag, &fontFullName, 0, "outputs font full name" },
-                                   { "-mono", argFlag, &keepMono, 0, "keep monospaced text blocks" },
                                    {} };
 
 class SplashOutputDevNoText : public SplashOutputDev
