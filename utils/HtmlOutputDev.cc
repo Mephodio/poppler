@@ -981,51 +981,87 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
     } else {
         fprintf(f, "<a name=%d></a>", pageNum);
 
+        // -----------
+
         double curXMin;
+        HtmlString *ptrFrom;
+        HtmlString *prev = nullptr;
         bool repeat = true;
 
         while (repeat) {
             curXMin = INFINITY;
+            ptrFrom = nullptr;
             repeat = false;
 
-            for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
+            for (HtmlString *tmp = yxStrings; tmp; prev = tmp, tmp = tmp->yxNext) {
                 if (tmp->htext && !(tmp->printed)) {
-                    if (tmp->xMin < curXMin) {
-                        curXMin = tmp->xMin;
+                    if (!ptrFrom) {
+                        ptrFrom = tmp;
+                    } else if (abs(tmp->xMin - curXMin) > 0.0001) {
+                        // TODO: detect collision
+                        //           and handle it
+                        bool isCollision = false;
+
+                        if (prev->len == -1 || tmp->len == -1) {
+                        } else if (tmp->yMin < prev->yMax) {
+                            isCollision = true;
+                        } else {
+                            for (HtmlString *tmp2 = tmp->yxNext;
+                                    tmp2 && tmp2->yMin <= prev->yMax + (prev->yMax - prev->yMin);
+                                    tmp2 = tmp2->yxNext) {
+                                if (tmp2->htext && !(tmp2->printed) &&
+                                            abs(tmp2->xMin - curXMin) < 0.0001) {
+                                    isCollision = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // if (prev->len == -1 || tmp->len == -1) {
+                        if (isCollision && pageNum != 8) {
+                            printf("\ncol | curXMin %f\n", curXMin);
+                            printf("    prev: yMin %f yMax %f xMin %f xMax %f | %s\n", prev->yMin, prev->yMax, prev->xMin, prev->xMax, prev->htext->c_str());
+                            printf("    tmp:  yMin %f yMax %f xMin %f xMax %f | %s\n", tmp->yMin, tmp->yMax, tmp->xMin, tmp->xMax, tmp->htext->c_str());
+                        }
+
+                        if (isCollision) {
+                            repeat = true;
+                            if (tmp->xMin < curXMin) {
+                                ptrFrom = tmp;
+                            }
+                        } else {
+                            // printing whole column:
+                            for (HtmlString *tmp2 = ptrFrom; tmp2 != tmp; tmp2 = tmp2->yxNext) {
+                                if (!(tmp2->htext) || tmp2->printed ||
+                                        abs(tmp2->xMin - curXMin) > 0.0001) {
+                                    continue;
+                                }
+                                dumpSingleString(f, tmp2);
+                            }
+
+                            if (repeat) {
+                                ptrFrom = nullptr;
+                                break;
+                            }
+
+                            ptrFrom = tmp;
+                        }
                     }
+                    curXMin = tmp->xMin;
                 }
             }
-
-            for (HtmlString *tmp = yxStrings; tmp; tmp = tmp->yxNext) {
-                if (tmp->htext && !(tmp->printed)) {
-                    if (tmp->xMin > curXMin + abs(tmp->xMax - tmp->xMin) * 0.1) {
-                        // printf("curXMin: %f  \txMin: %f\n", curXMin, tmp->xMin);
-                        repeat = true;
+            if (ptrFrom) {
+                for (HtmlString *tmp = ptrFrom; tmp; tmp = tmp->yxNext) {
+                    if (!(tmp->htext) || tmp->printed ||
+                            abs(tmp->xMin - curXMin) > 0.0001) {
                         continue;
                     }
-                    tmp->printed = true;
-                    if (tmp->len == -1) {
-                        // see printCSS() for class names
-                        const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
-                        int style_index = 0;
-                        if (tmp->xMin > tmp->xMax) {
-                            style_index += 1; // xFlip
-                        }
-                        if (tmp->yMin > tmp->yMax) {
-                            style_index += 2; // yFlip
-                        }
-
-                        fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], tmp->htext->c_str());
-                        // delete img;
-
-                    }
-                    else {
-                        fputs(tmp->htext->c_str(), f);
-                        fputs("<br/>\n", f);
-                    }
+                    dumpSingleString(f, tmp);
                 }
             }
         }
+
+
 
         // Loop over the list of image names on this page
         for (auto ptr : imgList) {
@@ -1035,6 +1071,29 @@ void HtmlPage::dump(FILE *f, int pageNum, const std::vector<std::string> &backgr
         imgList.clear();
 
         fputs("<hr/>\n", f);
+    }
+}
+
+void HtmlPage::dumpSingleString(FILE *f, HtmlString *str) {
+    str->printed = true;
+    if (str->len == -1) {
+        // see printCSS() for class names
+        const char *styles[4] = { "", " class=\"xflip\"", " class=\"yflip\"", " class=\"xyflip\"" };
+        int style_index = 0;
+        if (str->xMin > str->xMax) {
+            style_index += 1; // xFlip
+        }
+        if (str->yMin > str->yMax) {
+            style_index += 2; // yFlip
+        }
+
+        fprintf(f, "<img%s src=\"%s\"/><br/>\n", styles[style_index], str->htext->c_str());
+        // delete img;
+
+    }
+    else {
+        fputs(str->htext->c_str(), f);
+        fputs("<br/>\n", f);
     }
 }
 
